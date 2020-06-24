@@ -1,17 +1,17 @@
-# correlated
-correlated is a plugin framework to facilitate log corelation from multiple 
+# corelated
+corelated is a plugin framework to facilitate log corelation from multiple 
 sources. It consists of three categories: inputs, parsers, and actions. 
 
-The initial reason for developing correlated was to add information from 
+The initial reason for developing corelated was to add information from 
 winlogbeat to Moloch. Logstash is not a viable method as it queries 
-Elasticsearch for each event to find the correlating Moloch session. This 
+Elasticsearch for each event to find the corelating Moloch session. This 
 caused Elasticsearch to be overwelhmed with queries. As a solution to this 
-problem correlated uses an Elasticsearch `input` plugin to query Elasticsearch 
+problem corelated uses an Elasticsearch `input` plugin to query Elasticsearch 
 once per `pollTime` seconds, and keeping all records in memory to be matched 
 with winlogbeat records. While this typically would not be the correct method 
-to do log correlation, it falls in line with the intention of Elasticsearch to 
+to do log corelation, it falls in line with the intention of Elasticsearch to 
 have live, quick results to queries. The load placed on Elasticsearch clusters 
-is insignificant, and this method allows for far more than just correlation 
+is insignificant, and this method allows for far more than just corelation 
 between two indices. It allows a python script to "walk" a large database of 
 records with minimal impact to resources. 
 
