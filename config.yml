@@ -1,0 +1,232 @@
+pollTime: 5
+
+inputs:
+  Elasticsearch:
+  - name: winlogs-init
+    duration: 1800
+    delay: 120
+    doc_type: doc
+    source:
+    - SourceIp
+    - SourcePort
+    - DestinationIp
+    - DestinationPort
+    - Image
+    - '@timestamp'
+    - ts
+    - ProcessId
+    - User
+    - ProcessGuid
+    - SourceHostname
+    - DestinationHostname
+    host: elasticsearch:9200
+    pattern: "winlogbeat-%y%m%d"
+    query:
+      bool:
+        must:
+        - term:
+            Initiated: "true"
+        must_not:
+        - exists:
+            field: moloch_id
+    indexedTimestamp: '@timestamp'
+    timestamps:
+      '@timestamp':
+        type: string
+        replace:
+          regex: "[Z]$"
+          string: "000"
+        format: "%Y-%m-%dT%H:%M:%S.%f"
+      ts:
+        type: string
+        replace:
+          regex: "[Z]$"
+          string: "000"
+        format: "%Y-%m-%dT%H:%M:%S.%f"
+  - name: winlogs-resp
+    duration: 1800
+    delay: 120
+    doc_type: doc
+    source:
+    - SourceIp
+    - SourcePort
+    - DestinationIp
+    - DestinationPort
+    - Image
+    - '@timestamp'
+    - ts
+    - ProcessId
+    - User
+    - ProcessGuid
+    - SourceHostname
+    - DestinationHostname
+    host: elasticsearch:9200
+    pattern: "winlogbeat-%y%m%d"
+    query:
+      bool:
+        must:
+        - term:
+            Initiated: "false"
+        must_not:
+        - exists:
+            field: moloch_id
+    indexedTimestamp: '@timestamp'
+    timestamps:
+      '@timestamp':
+        type: string
+        replace:
+          regex: "[Z]$"
+          string: "000"
+        format: "%Y-%m-%dT%H:%M:%S.%f"
+      ts:
+        type: string
+        replace:
+          regex: "[Z]$"
+          string: "000"
+        format: "%Y-%m-%dT%H:%M:%S.%f"
+  - name: moloch
+    host: elasticsearch:9200
+    duration: 1800
+    delay: 120
+    doc_type: session
+    source:
+    - srcIp
+    - srcPort
+    - dstIp
+    - dstPort
+    - firstPacket
+    - timestamp
+    - procs
+    pattern: "sessions2-%y%m%d"
+    query:
+      bool:
+        must_not:
+          - bool:
+              should:
+                - exists:
+                    field: 'procs.src.user'
+                - exists:
+                    field: 'procs.dst.user'
+          - term:
+              tcpflags.syn: 0
+        must:
+          - bool:
+              should:
+                - term:
+                    srcIp: 192.168.4.104
+                - term:
+                    dstIp: 192.168.4.104
+    indexedTimestamp: timestamp
+    timestamps:
+      timestamp:
+        type: UNIX
+        replace:
+          regex: "([0-9]{3}$)"
+          string: ".\\1"
+        format: "%y-%m-%d %H:%M:%S:%f"
+      firstPacket:
+        type: UNIX
+        replace:
+          regex: "([0-9]{3}$)"
+          string: ".\\1"
+        format: "%y-%m-%d %H:%M:%S:%f"
+parsers:
+  moloch-init:
+    name: Match
+    workers: 2
+    sources:
+      moloch:
+        fields:
+        - - 'srcIp'
+          - 'srcPort'
+          - 'dstIp'
+          - 'dstPort'
+        - - 'dstIp'
+          - 'dstPort'
+          - 'srcIp'
+          - 'srcPort'
+        timestamp: 'firstPacket'
+        duration: 1800
+        tolerance: 10
+        method: closest
+      winlogs-init:
+        fields:
+        - - 'SourceIp'
+          - 'SourcePort'
+          - 'DestinationIp'
+          - 'DestinationPort'
+        timestamp: 'ts'
+        duration: 1800
+        tolerance: 10
+        method: all
+  moloch-resp:
+    name: Match
+    workers: 2
+    sources:
+      moloch:
+        fields:
+        - - 'srcIp'
+          - 'srcPort'
+          - 'dstIp'
+          - 'dstPort'
+        - - 'dstIp'
+          - 'dstPort'
+          - 'srcIp'
+          - 'srcPort'
+        timestamp: 'firstPacket'
+        duration: 1800
+        tolerance: 10
+        method: all
+      winlogs-resp:
+        fields:
+        - - 'DestinationIp'
+          - 'DestinationPort'
+          - 'SourceIp'
+          - 'SourcePort'
+        timestamp: 'ts'
+        duration: 1800
+        tolerance: 10
+        method: all
+actions:
+  Elasticsearch:
+  - name: moloch-resp
+    host: elasticsearch:9200
+    type: update
+    source: moloch
+    fields:
+    - moloch: procs.dst.image
+      winlogs-resp: Image
+    - moloch: procs.dst.pid
+      winlogs-resp: ProcessId
+    - moloch: procs.dst.user
+      winlogs-resp: User
+    - moloch: procs.dst.pguid
+      winlogs-resp: ProcessGuid
+    - moloch: procs.dst.host
+      winlogs-resp: SourceHostname
+    - moloch: procs.dst.dstHost
+      winlogs-resp: DestinationHostname
+  - name: moloch-init
+    host: 192.168.4.222:9200
+    type: update
+    source: winlogs-init
+    fields:
+      - moloch: _id
+        winlogs-init: moloch_id
+  - name: moloch-init
+    host: elasticsearch:9200
+    type: update
+    source: moloch
+    fields:
+    - moloch: procs.src.image
+      winlogs-init: Image
+    - moloch: procs.src.pid
+      winlogs-init: ProcessId
+    - moloch: procs.src.user
+      winlogs-init: User
+    - moloch: procs.src.pguid
+      winlogs-init: ProcessGuid
+    - moloch: procs.src.host
+      winlogs-init: SourceHostname
+    - moloch: procs.src.dstHost
+      winlogs-init: DestinationHostname
